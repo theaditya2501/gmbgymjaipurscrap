@@ -3,7 +3,6 @@ import os
 import json
 import random
 import sys
-from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -26,7 +25,7 @@ SHEET_NO_PHONE_NAME = "Jaipur Gym No Phone"
 MINIMUM_REVIEWS = 10
 
 # =========================
-# GOOGLE SHEETS SETUP
+# GOOGLE SHEETS
 # =========================
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -45,20 +44,19 @@ sheet_with_phone = client.open(SHEET_WITH_PHONE_NAME).sheet1
 sheet_no_phone = client.open(SHEET_NO_PHONE_NAME).sheet1
 
 if not sheet_with_phone.get_all_values():
-    sheet_with_phone.append_row(["Name", "Profile Link", "Number Available"])
+    sheet_with_phone.append_row(["Name","Profile Link","Number Available"])
 
 if not sheet_no_phone.get_all_values():
-    sheet_no_phone.append_row(["Name", "Profile Link", "Number Available"])
+    sheet_no_phone.append_row(["Name","Profile Link","Number Available"])
 
 # =========================
-# DRIVER SETUP
+# DRIVER
 # =========================
-
-print("🌍 Starting Chromium browser")
+print("🌍 Starting Chrome")
 
 options = Options()
 
-options.binary_location = "/usr/bin/chromium"
+options.binary_location="/usr/bin/chromium"
 
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
@@ -70,39 +68,33 @@ service = Service("/usr/bin/chromedriver")
 
 driver = webdriver.Chrome(service=service, options=options)
 
-wait = WebDriverWait(driver, 15)
+wait = WebDriverWait(driver,25)
 
-print("✅ Chrome driver started")
+print("✅ Chrome started")
 
 # =========================
 # FUNCTIONS
 # =========================
 def detect_phone():
-    tel_elements = driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
-    call_buttons = driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
-    return "YES" if tel_elements or call_buttons else "NO"
+    tel=driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
+    call=driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
+    return "YES" if tel or call else "NO"
 
 
 def is_closed():
-    elements = driver.find_elements(By.XPATH,
+    elements=driver.find_elements(By.XPATH,
         "//*[contains(text(),'Temporarily closed') or contains(text(),'Permanently closed')]"
     )
     return True if elements else False
 
 
 def get_review_count():
+    reviews=driver.find_elements(By.XPATH,'//span[@role="img" and contains(@aria-label,"review")]')
 
-    review_elements = driver.find_elements(
-        By.XPATH,
-        '//span[@role="img" and contains(@aria-label,"review")]'
-    )
-
-    for el in review_elements:
-
-        aria_text = el.get_attribute("aria-label")
-
-        if aria_text:
-            number = ''.join(filter(str.isdigit, aria_text))
+    for r in reviews:
+        text=r.get_attribute("aria-label")
+        if text:
+            number=''.join(filter(str.isdigit,text))
             if number:
                 return int(number)
 
@@ -112,20 +104,44 @@ def get_review_count():
 # =========================
 # AREAS
 # =========================
-JAIPUR_AREAS = [
+JAIPUR_AREAS=[
 "Malviya Nagar",
 "Mansarovar",
 "Vaishali Nagar",
 "Jagatpura"
 ]
 
-KEYWORDS = [
+KEYWORDS=[
 "Gym",
 "Fitness Center",
 "Workout Gym"
 ]
 
 saved_links=set()
+
+# =========================
+# FIND RESULTS PANEL
+# =========================
+def find_results_panel():
+
+    for i in range(10):
+
+        try:
+            panel=driver.find_element(By.XPATH,'//div[@role="feed"]')
+            return panel
+        except:
+            pass
+
+        try:
+            panel=driver.find_element(By.XPATH,'//div[contains(@class,"m6QErb")]')
+            return panel
+        except:
+            pass
+
+        time.sleep(2)
+
+    return None
+
 
 # =========================
 # MAIN LOOP
@@ -138,22 +154,26 @@ try:
 
             query=f"{keyword} in {area} Jaipur"
 
-            search_url="https://www.google.com/maps/search/"+query.replace(" ","+")
+            print("🔎 Searching:",query)
 
-            print(f"🔎 Searching: {query}")
+            url="https://www.google.com/maps/search/"+query.replace(" ","+")
 
-            driver.get(search_url)
+            driver.get(url)
 
             time.sleep(5)
 
-            results_panel = wait.until(
-                EC.presence_of_element_located((By.XPATH,'//div[@role="feed"]'))
-            )
+            results_panel=find_results_panel()
+
+            if results_panel is None:
+                print("❌ Results panel not found")
+                continue
+
+            print("✅ Results panel detected")
 
             profile_links=set()
 
             last_count=0
-            no_change_count=0
+            no_change=0
 
             while True:
 
@@ -166,7 +186,7 @@ try:
                     if link:
                         profile_links.add(link.split("?")[0])
 
-                print("Profiles collected:",len(profile_links))
+                print("Profiles:",len(profile_links))
 
                 driver.execute_script(
                     "arguments[0].scrollTop=arguments[0].scrollHeight",
@@ -176,11 +196,11 @@ try:
                 time.sleep(2)
 
                 if len(profile_links)==last_count:
-                    no_change_count+=1
+                    no_change+=1
                 else:
-                    no_change_count=0
+                    no_change=0
 
-                if no_change_count>=3:
+                if no_change>=3:
                     break
 
                 last_count=len(profile_links)
@@ -202,17 +222,14 @@ try:
                     continue
 
                 if is_closed():
-                    print("⛔ Closed:",name)
                     continue
 
-                review_count=get_review_count()
+                reviews=get_review_count()
 
-                if review_count is None:
-                    print("⚠ No review:",name)
+                if reviews is None:
                     continue
 
-                if review_count<MINIMUM_REVIEWS:
-                    print("⭐ Low reviews:",name)
+                if reviews<MINIMUM_REVIEWS:
                     continue
 
                 phone=detect_phone()
@@ -236,4 +253,4 @@ finally:
 
     driver.quit()
 
-    print("🛑 Scraper finished")
+    print("🛑 Scraper stopped")
