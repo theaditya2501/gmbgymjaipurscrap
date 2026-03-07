@@ -23,7 +23,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 SHEET_WITH_PHONE_NAME = "Jaipur Gym With Phone"
 SHEET_NO_PHONE_NAME = "Jaipur Gym No Phone"
 PROGRESS_FILE = "progress_jaipur.json"
-MINIMUM_REVIEWS = 10  # Changed from 5 to 10
+MINIMUM_REVIEWS = 10
 
 # =========================
 # GOOGLE SHEETS SETUP
@@ -33,7 +33,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+# 🔹 UPDATED: Load credentials from Railway environment variable
+creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+
 client = gspread.authorize(creds)
 
 sheet_with_phone = client.open(SHEET_WITH_PHONE_NAME).sheet1
@@ -74,31 +77,31 @@ total_no_review_skipped = 0
 # JAIPUR AREAS
 # =========================
 JAIPUR_AREAS = [
-    "Adarsh Nagar", "Agra Road", "Agrasen Nagar", "Ajmer Road", "Albert Hall", "Ambabari",
-    "Amer", "Anand Nagar", "Bais Godam", "Bani Park", "Bapu Nagar", "Barkat Nagar",
-    "Bhatta Basti", "Bhankrota", "Bhawani Nagar", "Bherunath Colony", "Bindayaka",
-    "Civil Lines", "C Scheme", "Chandpole", "Chitrakoot", "Dadu Dayal Nagar",
-    "Dahar Ka Balaji", "Dhanwantri Nagar", "Dilwas", "Fateh Tiba", "Gandhi Nagar",
-    "Ganga Jamuna Petrol Pump", "Gopinath Marg", "Goverdhanpura", "Gulab Nagar",
-    "Guru Nanakpura", "Hathipura", "Heerapura", "Jagatpura", "Jaisinghpura",
-    "Jal Mahal", "Jamnagar Colony", "Jhotwara", "Kalwar Road", "Kamal Pokhar",
-    "Kalu Ji Ka Mohalla", "Kanti Modi Nagar", "Kartarpura", "Khajuri Kalan",
-    "Khoh Nagorian", "Lal Kothi", "Malviya Nagar", "Mansarovar", "Mawata",
-    "MI Road", "Murlipura", "Nehru Nagar", "New Colony", "New Sanganer Road",
-    "Niwaru Road", "Nursery Circle", "Panch Batti", "Panchyawala", "Patrakar Colony",
-    "Patel Nagar", "Peetal Factory", "Pratap Nagar", "Preetam Nagar", "Raja Park",
-    "Rambagh", "Ramchandrapura", "Ramnagar Mod", "Renwal", "Sethi Colony",
-    "Shastri Nagar", "Shipra Path", "Sikar Road", "Sindhi Colony", "Sitapura",
-    "Sodala", "Subhash Nagar", "Sumer Nagar", "Surya Nagar", "Talera Colony",
-    "Tonaklal", "Triveni Nagar", "Vaishali Nagar", "Vasant Kunj", "Vidyadhar Nagar"
+    "Adarsh Nagar","Agra Road","Agrasen Nagar","Ajmer Road","Albert Hall","Ambabari",
+    "Amer","Anand Nagar","Bais Godam","Bani Park","Bapu Nagar","Barkat Nagar",
+    "Bhatta Basti","Bhankrota","Bhawani Nagar","Bherunath Colony","Bindayaka",
+    "Civil Lines","C Scheme","Chandpole","Chitrakoot","Dadu Dayal Nagar",
+    "Dahar Ka Balaji","Dhanwantri Nagar","Dilwas","Fateh Tiba","Gandhi Nagar",
+    "Ganga Jamuna Petrol Pump","Gopinath Marg","Goverdhanpura","Gulab Nagar",
+    "Guru Nanakpura","Hathipura","Heerapura","Jagatpura","Jaisinghpura",
+    "Jal Mahal","Jamnagar Colony","Jhotwara","Kalwar Road","Kamal Pokhar",
+    "Kalu Ji Ka Mohalla","Kanti Modi Nagar","Kartarpura","Khajuri Kalan",
+    "Khoh Nagorian","Lal Kothi","Malviya Nagar","Mansarovar","Mawata",
+    "MI Road","Murlipura","Nehru Nagar","New Colony","New Sanganer Road",
+    "Niwaru Road","Nursery Circle","Panch Batti","Panchyawala","Patrakar Colony",
+    "Patel Nagar","Peetal Factory","Pratap Nagar","Preetam Nagar","Raja Park",
+    "Rambagh","Ramchandrapura","Ramnagar Mod","Renwal","Sethi Colony",
+    "Shastri Nagar","Shipra Path","Sikar Road","Sindhi Colony","Sitapura",
+    "Sodala","Subhash Nagar","Sumer Nagar","Surya Nagar","Talera Colony",
+    "Tonaklal","Triveni Nagar","Vaishali Nagar","Vasant Kunj","Vidyadhar Nagar"
 ]
 
 KEYWORDS = [
-    "Gym", "Fitness Center", "Fitness Studio", "Workout Gym",
-    "Bodybuilding Gym", "CrossFit Gym", "Yoga Studio", "Zumba Classes",
-    "Aerobics Classes", "Personal Trainer", "Weight Training Gym",
-    "Cardio Gym", "Ladies Gym", "Men's Gym", "24 Hour Gym",
-    "Powerlifting Gym", "Functional Training", "HIIT Training"
+    "Gym","Fitness Center","Fitness Studio","Workout Gym",
+    "Bodybuilding Gym","CrossFit Gym","Yoga Studio","Zumba Classes",
+    "Aerobics Classes","Personal Trainer","Weight Training Gym",
+    "Cardio Gym","Ladies Gym","Men's Gym","24 Hour Gym",
+    "Powerlifting Gym","Functional Training","HIIT Training"
 ]
 
 # =========================
@@ -122,21 +125,27 @@ progress = load_progress()
 def update_summary():
     summary_sheet.clear()
     summary_sheet.append_rows([
-        ["Metric", "Value"],
-        ["Total Profiles Found", total_found_global],
-        ["With Phone", total_with_phone_global],
-        ["No Phone", total_no_phone_global],
-        ["Skipped Duplicates", total_skipped_global],
-        ["Closed Businesses Skipped", total_closed_skipped],
-        ["Reviews < 10 Skipped", total_low_review_skipped],
-        ["No Review Data Skipped", total_no_review_skipped],
-        ["Last Updated", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+        ["Metric","Value"],
+        ["Total Profiles Found",total_found_global],
+        ["With Phone",total_with_phone_global],
+        ["No Phone",total_no_phone_global],
+        ["Skipped Duplicates",total_skipped_global],
+        ["Closed Businesses Skipped",total_closed_skipped],
+        ["Reviews < 10 Skipped",total_low_review_skipped],
+        ["No Review Data Skipped",total_no_review_skipped],
+        ["Last Updated",datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
     ])
 
 # =========================
 # DRIVER SETUP
 # =========================
 options = Options()
+
+# 🔹 UPDATED FOR CLOUD
+options.add_argument("--headless=new")
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+
 options.add_argument("--start-maximized")
 options.add_argument("--disable-blink-features=AutomationControlled")
 
@@ -151,8 +160,8 @@ wait = WebDriverWait(driver, 15)
 # DETECTION FUNCTIONS
 # =========================
 def detect_phone():
-    tel_elements = driver.find_elements(By.XPATH, '//a[starts-with(@href,"tel:")]')
-    call_buttons = driver.find_elements(By.XPATH, '//button[contains(@aria-label,"Call")]')
+    tel_elements = driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
+    call_buttons = driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
     return "YES" if tel_elements or call_buttons else "NO"
 
 def is_closed():
@@ -166,7 +175,6 @@ def is_closed():
 
 def get_review_count():
     try:
-        # 🔥 Directly target review aria-label
         review_elements = driver.find_elements(
             By.XPATH,
             '//span[@role="img" and contains(@aria-label,"review")]'
@@ -196,7 +204,7 @@ try:
             keyword = KEYWORDS[keyword_idx]
 
             query = f"{keyword} in {area} Jaipur"
-            search_url = "https://www.google.com/maps/search/" + query.replace(" ", "+")
+            search_url = "https://www.google.com/maps/search/" + query.replace(" ","+")
 
             print(f"\n🔎 Searching: {query}")
             driver.get(search_url)
@@ -204,7 +212,7 @@ try:
 
             try:
                 results_panel = wait.until(
-                    EC.presence_of_element_located((By.XPATH, '//div[@role="feed"]'))
+                    EC.presence_of_element_located((By.XPATH,'//div[@role="feed"]'))
                 )
             except:
                 continue
@@ -213,7 +221,7 @@ try:
             last_count = 0
 
             while True:
-                cards = driver.find_elements(By.XPATH, '//a[contains(@href,"/maps/place/")]')
+                cards = driver.find_elements(By.XPATH,'//a[contains(@href,"/maps/place/")]')
                 for c in cards:
                     link = c.get_attribute("href")
                     if link:
@@ -237,20 +245,18 @@ try:
                     continue
 
                 driver.get(link)
-                time.sleep(random.uniform(2, 4))
+                time.sleep(random.uniform(2,4))
 
                 try:
-                    name = driver.find_element(By.XPATH, '//h1').text.strip()
+                    name = driver.find_element(By.XPATH,'//h1').text.strip()
                 except:
                     continue
 
-                # Skip Closed
                 if is_closed():
                     print(f"⛔ Closed Skipped: {name}")
                     total_closed_skipped += 1
                     continue
 
-                # ⭐ Skip If Reviews < 10 (updated from 5)
                 review_count = get_review_count()
 
                 if review_count is None:
@@ -266,10 +272,10 @@ try:
                 phone = detect_phone()
 
                 if phone == "YES":
-                    sheet_with_phone.append_row([name, link, phone])
+                    sheet_with_phone.append_row([name,link,phone])
                     total_with_phone_global += 1
                 else:
-                    sheet_no_phone.append_row([name, link, phone])
+                    sheet_no_phone.append_row([name,link,phone])
                     total_no_phone_global += 1
 
                 all_saved_links.add(link)
