@@ -8,12 +8,13 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
 print("🚀 SCRAPER STARTED")
+
 sys.stdout.reconfigure(encoding='utf-8')
 
 # =========================
@@ -21,7 +22,6 @@ sys.stdout.reconfigure(encoding='utf-8')
 # =========================
 SHEET_WITH_PHONE_NAME = "Jaipur Gym With Phone"
 SHEET_NO_PHONE_NAME = "Jaipur Gym No Phone"
-PROGRESS_FILE = "progress_jaipur.json"
 MINIMUM_REVIEWS = 10
 
 # =========================
@@ -32,11 +32,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# Load credentials from Railway variable
 creds_raw = os.environ["GOOGLE_CREDS"]
 creds_dict = json.loads(creds_raw)
 
-# Fix newline formatting
+# Fix newline issue
 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
 
 creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
@@ -45,45 +44,24 @@ client = gspread.authorize(creds)
 sheet_with_phone = client.open(SHEET_WITH_PHONE_NAME).sheet1
 sheet_no_phone = client.open(SHEET_NO_PHONE_NAME).sheet1
 
-# Add headers
 if not sheet_with_phone.get_all_values():
     sheet_with_phone.append_row(["Name", "Profile Link", "Number Available"])
 
 if not sheet_no_phone.get_all_values():
     sheet_no_phone.append_row(["Name", "Profile Link", "Number Available"])
 
-# Summary sheet
-try:
-    summary_sheet = sheet_with_phone.spreadsheet.worksheet("SUMMARY")
-except:
-    summary_sheet = sheet_with_phone.spreadsheet.add_worksheet(
-        title="SUMMARY", rows="20", cols="5"
-    )
-
-saved_links_with_phone = set(sheet_with_phone.col_values(2))
-saved_links_no_phone = set(sheet_no_phone.col_values(2))
-all_saved_links = saved_links_with_phone.union(saved_links_no_phone)
-
-# =========================
-# GLOBAL COUNTERS
-# =========================
-total_found_global = 0
-total_with_phone_global = 0
-total_no_phone_global = 0
-total_skipped_global = 0
-total_closed_skipped = 0
-total_low_review_skipped = 0
-total_no_review_skipped = 0
-
 # =========================
 # DRIVER SETUP
 # =========================
+print("🌍 Starting Chrome")
+
 options = Options()
 
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
+options.add_argument("--remote-debugging-port=9222")
 
 options.binary_location = "/usr/bin/chromium"
 
@@ -92,7 +70,7 @@ driver = webdriver.Chrome(options=options)
 wait = WebDriverWait(driver, 15)
 
 # =========================
-# DETECTION FUNCTIONS
+# FUNCTIONS
 # =========================
 def detect_phone():
     tel_elements = driver.find_elements(By.XPATH, '//a[starts-with(@href,"tel:")]')
@@ -131,30 +109,27 @@ def get_review_count():
 
 
 # =========================
-# UPDATE SUMMARY
+# AREAS & KEYWORDS
 # =========================
-def update_summary():
-    summary_sheet.clear()
-    summary_sheet.append_rows([
-        ["Metric", "Value"],
-        ["Total Profiles Found", total_found_global],
-        ["With Phone", total_with_phone_global],
-        ["No Phone", total_no_phone_global],
-        ["Skipped Duplicates", total_skipped_global],
-        ["Closed Businesses Skipped", total_closed_skipped],
-        ["Reviews < 10 Skipped", total_low_review_skipped],
-        ["No Review Data Skipped", total_no_review_skipped],
-        ["Last Updated", datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
-    ])
+JAIPUR_AREAS = [
+    "Malviya Nagar",
+    "Mansarovar",
+    "Vaishali Nagar",
+    "Jagatpura"
+]
 
+KEYWORDS = [
+    "Gym",
+    "Fitness Center",
+    "Workout Gym"
+]
+
+saved_links = set()
 
 # =========================
 # MAIN LOOP
 # =========================
 try:
-
-    JAIPUR_AREAS = ["Malviya Nagar", "Mansarovar", "Vaishali Nagar", "Jagatpura"]
-    KEYWORDS = ["Gym", "Fitness Center", "Workout Gym"]
 
     for area in JAIPUR_AREAS:
         for keyword in KEYWORDS:
@@ -165,17 +140,19 @@ try:
             print(f"\n🔎 Searching: {query}")
 
             driver.get(search_url)
-            time.sleep(3)
+            time.sleep(5)
 
             try:
                 results_panel = wait.until(
                     EC.presence_of_element_located((By.XPATH, '//div[@role="feed"]'))
                 )
             except:
+                print("❌ Results panel not found")
                 continue
 
             profile_links = set()
             last_count = 0
+            scroll_attempt = 0
 
             while True:
 
@@ -186,59 +163,72 @@ try:
                     if link:
                         profile_links.add(link.split("?")[0])
 
+                print("Profiles collected:", len(profile_links))
+
                 driver.execute_script(
                     "arguments[0].scrollTop = arguments[0].scrollHeight",
                     results_panel
                 )
 
-                time.sleep(1.5)
+                time.sleep(2)
 
                 if len(profile_links) == last_count:
+                    scroll_attempt += 1
+                else:
+                    scroll_attempt = 0
+
+                if scroll_attempt >= 3:
                     break
 
                 last_count = len(profile_links)
 
+            print("Total profiles found:", len(profile_links))
+
             for link in profile_links:
 
-                if link in all_saved_links:
+                if link in saved_links:
                     continue
 
                 driver.get(link)
-                time.sleep(random.uniform(2, 4))
+                time.sleep(random.uniform(2,4))
 
                 try:
-                    name = driver.find_element(By.XPATH, '//h1').text.strip()
+                    name = driver.find_element(By.XPATH,'//h1').text.strip()
                 except:
                     continue
 
                 if is_closed():
+                    print("⛔ Closed:", name)
                     continue
 
                 review_count = get_review_count()
 
                 if review_count is None:
+                    print("⚠ No review data:", name)
                     continue
 
                 if review_count < MINIMUM_REVIEWS:
+                    print("⭐ Low reviews:", name)
                     continue
 
                 phone = detect_phone()
+
+                print("Saving:", name, phone)
 
                 if phone == "YES":
                     sheet_with_phone.append_row([name, link, phone])
                 else:
                     sheet_no_phone.append_row([name, link, phone])
 
-                all_saved_links.add(link)
+                saved_links.add(link)
 
                 time.sleep(1)
 
-            update_summary()
+except Exception as e:
 
-except KeyboardInterrupt:
-    print("Stopped manually")
+    print("❌ ERROR:", str(e))
 
 finally:
+
     driver.quit()
-
-
+    print("🛑 Scraper stopped")
