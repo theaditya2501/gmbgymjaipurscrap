@@ -50,7 +50,7 @@ if not sheet_no_phone.get_all_values():
     sheet_no_phone.append_row(["Name","Profile Link","Number Available"])
 
 # =========================
-# DRIVER
+# CHROME SETUP
 # =========================
 print("🌍 Starting Chrome")
 
@@ -62,12 +62,18 @@ options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
+options.add_argument("--disable-software-rasterizer")
+options.add_argument("--disable-features=VizDisplayCompositor")
+
+options.add_argument(
+"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+)
 
 service = Service("/usr/bin/chromedriver")
 
 driver = webdriver.Chrome(service=service, options=options)
 
-wait = WebDriverWait(driver,20)
+wait = WebDriverWait(driver, 20)
 
 print("✅ Chrome started")
 
@@ -76,15 +82,15 @@ print("✅ Chrome started")
 # =========================
 def detect_phone():
 
-    tel=driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
-    call=driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
+    tel = driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
+    call = driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
 
     return "YES" if tel or call else "NO"
 
 
 def is_closed():
 
-    elements=driver.find_elements(By.XPATH,
+    elements = driver.find_elements(By.XPATH,
         "//*[contains(text(),'Temporarily closed') or contains(text(),'Permanently closed')]"
     )
 
@@ -93,14 +99,14 @@ def is_closed():
 
 def get_review_count():
 
-    reviews=driver.find_elements(By.XPATH,'//span[@role="img" and contains(@aria-label,"review")]')
+    reviews = driver.find_elements(By.XPATH,'//span[@role="img" and contains(@aria-label,"review")]')
 
     for r in reviews:
 
-        text=r.get_attribute("aria-label")
+        text = r.get_attribute("aria-label")
 
         if text:
-            number=''.join(filter(str.isdigit,text))
+            number = ''.join(filter(str.isdigit,text))
             if number:
                 return int(number)
 
@@ -110,20 +116,20 @@ def get_review_count():
 # =========================
 # AREAS
 # =========================
-JAIPUR_AREAS=[
+JAIPUR_AREAS = [
 "Malviya Nagar",
 "Mansarovar",
 "Vaishali Nagar",
 "Jagatpura"
 ]
 
-KEYWORDS=[
+KEYWORDS = [
 "Gym",
 "Fitness Center",
 "Workout Gym"
 ]
 
-saved_links=set()
+saved_links = set()
 
 # =========================
 # MAIN LOOP
@@ -134,36 +140,47 @@ try:
 
         for keyword in KEYWORDS:
 
-            query=f"{keyword} in {area} Jaipur"
+            query = f"{keyword} in {area} Jaipur"
 
-            print("🔎 Searching:",query)
+            print("🔎 Searching:", query)
 
-            url="https://www.google.com/maps/search/"+query.replace(" ","+")
+            url = "https://www.google.com/maps/search/" + query.replace(" ","+")
 
-            driver.get(url)
+            try:
+                driver.get(url)
+            except:
+                print("⚠ Page load failed")
+                continue
 
-            # wait until business links appear
-            wait.until(
-                EC.presence_of_element_located((By.XPATH,'//a[contains(@href,"/maps/place/")]'))
-            )
+            time.sleep(6)
 
-            profile_links=set()
+            try:
+                wait.until(
+                    EC.presence_of_element_located(
+                        (By.XPATH,'//a[contains(@href,"/maps/place/")]')
+                    )
+                )
+            except:
+                print("❌ No results detected")
+                continue
 
-            last_count=0
-            no_change=0
+            profile_links = set()
+
+            last_count = 0
+            no_change = 0
 
             while True:
 
-                cards=driver.find_elements(By.XPATH,'//a[contains(@href,"/maps/place/")]')
+                cards = driver.find_elements(By.XPATH,'//a[contains(@href,"/maps/place/")]')
 
                 for c in cards:
 
-                    link=c.get_attribute("href")
+                    link = c.get_attribute("href")
 
                     if link:
                         profile_links.add(link.split("?")[0])
 
-                print("Profiles collected:",len(profile_links))
+                print("Profiles collected:", len(profile_links))
 
                 driver.execute_script(
                     "window.scrollTo(0, document.body.scrollHeight);"
@@ -171,17 +188,17 @@ try:
 
                 time.sleep(2)
 
-                if len(profile_links)==last_count:
-                    no_change+=1
+                if len(profile_links) == last_count:
+                    no_change += 1
                 else:
-                    no_change=0
+                    no_change = 0
 
-                if no_change>=3:
+                if no_change >= 3:
                     break
 
-                last_count=len(profile_links)
+                last_count = len(profile_links)
 
-            print("Total profiles:",len(profile_links))
+            print("Total profiles:", len(profile_links))
 
             for link in profile_links:
 
@@ -193,26 +210,26 @@ try:
                 time.sleep(random.uniform(2,4))
 
                 try:
-                    name=driver.find_element(By.XPATH,'//h1').text.strip()
+                    name = driver.find_element(By.XPATH,'//h1').text.strip()
                 except:
                     continue
 
                 if is_closed():
                     continue
 
-                reviews=get_review_count()
+                reviews = get_review_count()
 
                 if reviews is None:
                     continue
 
-                if reviews<MINIMUM_REVIEWS:
+                if reviews < MINIMUM_REVIEWS:
                     continue
 
-                phone=detect_phone()
+                phone = detect_phone()
 
-                print("Saving:",name,phone)
+                print("Saving:", name, phone)
 
-                if phone=="YES":
+                if phone == "YES":
                     sheet_with_phone.append_row([name,link,phone])
                 else:
                     sheet_no_phone.append_row([name,link,phone])
@@ -223,7 +240,7 @@ try:
 
 except Exception as e:
 
-    print("❌ ERROR:",str(e))
+    print("❌ ERROR:", str(e))
 
 finally:
 
