@@ -9,6 +9,7 @@ from google.oauth2.service_account import Credentials
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -35,7 +36,6 @@ SCOPES = [
 creds_raw = os.environ["GOOGLE_CREDS"]
 creds_dict = json.loads(creds_raw)
 
-# Fix newline issue
 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
 
 creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
@@ -53,9 +53,12 @@ if not sheet_no_phone.get_all_values():
 # =========================
 # DRIVER SETUP
 # =========================
-print("🌍 Starting Chrome")
+
+print("🌍 Starting Chromium browser")
 
 options = Options()
+
+options.binary_location = "/usr/bin/chromium"
 
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
@@ -63,68 +66,66 @@ options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
 options.add_argument("--remote-debugging-port=9222")
 
-options.binary_location = "/usr/bin/chromium"
+service = Service("/usr/bin/chromedriver")
 
-driver = webdriver.Chrome(options=options)
+driver = webdriver.Chrome(service=service, options=options)
 
 wait = WebDriverWait(driver, 15)
+
+print("✅ Chrome driver started")
 
 # =========================
 # FUNCTIONS
 # =========================
 def detect_phone():
-    tel_elements = driver.find_elements(By.XPATH, '//a[starts-with(@href,"tel:")]')
-    call_buttons = driver.find_elements(By.XPATH, '//button[contains(@aria-label,"Call")]')
+    tel_elements = driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
+    call_buttons = driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
     return "YES" if tel_elements or call_buttons else "NO"
 
 
 def is_closed():
-    try:
-        elements = driver.find_elements(By.XPATH,
-            "//*[contains(text(),'Temporarily closed') or contains(text(),'Permanently closed')]"
-        )
-        return True if elements else False
-    except:
-        return False
+    elements = driver.find_elements(By.XPATH,
+        "//*[contains(text(),'Temporarily closed') or contains(text(),'Permanently closed')]"
+    )
+    return True if elements else False
 
 
 def get_review_count():
-    try:
-        review_elements = driver.find_elements(
-            By.XPATH,
-            '//span[@role="img" and contains(@aria-label,"review")]'
-        )
 
-        for el in review_elements:
-            aria_text = el.get_attribute("aria-label")
-            if aria_text:
-                number = ''.join(filter(str.isdigit, aria_text))
-                if number:
-                    return int(number)
+    review_elements = driver.find_elements(
+        By.XPATH,
+        '//span[@role="img" and contains(@aria-label,"review")]'
+    )
 
-        return None
+    for el in review_elements:
 
-    except:
-        return None
+        aria_text = el.get_attribute("aria-label")
+
+        if aria_text:
+            number = ''.join(filter(str.isdigit, aria_text))
+            if number:
+                return int(number)
+
+    return None
 
 
 # =========================
-# AREAS & KEYWORDS
+# AREAS
 # =========================
 JAIPUR_AREAS = [
-    "Malviya Nagar",
-    "Mansarovar",
-    "Vaishali Nagar",
-    "Jagatpura"
+"Malviya Nagar",
+"Mansarovar",
+"Vaishali Nagar",
+"Jagatpura"
 ]
 
 KEYWORDS = [
-    "Gym",
-    "Fitness Center",
-    "Workout Gym"
+"Gym",
+"Fitness Center",
+"Workout Gym"
 ]
 
-saved_links = set()
+saved_links=set()
 
 # =========================
 # MAIN LOOP
@@ -132,57 +133,59 @@ saved_links = set()
 try:
 
     for area in JAIPUR_AREAS:
+
         for keyword in KEYWORDS:
 
-            query = f"{keyword} in {area} Jaipur"
-            search_url = "https://www.google.com/maps/search/" + query.replace(" ", "+")
+            query=f"{keyword} in {area} Jaipur"
 
-            print(f"\n🔎 Searching: {query}")
+            search_url="https://www.google.com/maps/search/"+query.replace(" ","+")
+
+            print(f"🔎 Searching: {query}")
 
             driver.get(search_url)
+
             time.sleep(5)
 
-            try:
-                results_panel = wait.until(
-                    EC.presence_of_element_located((By.XPATH, '//div[@role="feed"]'))
-                )
-            except:
-                print("❌ Results panel not found")
-                continue
+            results_panel = wait.until(
+                EC.presence_of_element_located((By.XPATH,'//div[@role="feed"]'))
+            )
 
-            profile_links = set()
-            last_count = 0
-            scroll_attempt = 0
+            profile_links=set()
+
+            last_count=0
+            no_change_count=0
 
             while True:
 
-                cards = driver.find_elements(By.XPATH, '//a[contains(@href,"/maps/place/")]')
+                cards=driver.find_elements(By.XPATH,'//a[contains(@href,"/maps/place/")]')
 
                 for c in cards:
-                    link = c.get_attribute("href")
+
+                    link=c.get_attribute("href")
+
                     if link:
                         profile_links.add(link.split("?")[0])
 
-                print("Profiles collected:", len(profile_links))
+                print("Profiles collected:",len(profile_links))
 
                 driver.execute_script(
-                    "arguments[0].scrollTop = arguments[0].scrollHeight",
+                    "arguments[0].scrollTop=arguments[0].scrollHeight",
                     results_panel
                 )
 
                 time.sleep(2)
 
-                if len(profile_links) == last_count:
-                    scroll_attempt += 1
+                if len(profile_links)==last_count:
+                    no_change_count+=1
                 else:
-                    scroll_attempt = 0
+                    no_change_count=0
 
-                if scroll_attempt >= 3:
+                if no_change_count>=3:
                     break
 
-                last_count = len(profile_links)
+                last_count=len(profile_links)
 
-            print("Total profiles found:", len(profile_links))
+            print("Total profiles:",len(profile_links))
 
             for link in profile_links:
 
@@ -190,35 +193,36 @@ try:
                     continue
 
                 driver.get(link)
+
                 time.sleep(random.uniform(2,4))
 
                 try:
-                    name = driver.find_element(By.XPATH,'//h1').text.strip()
+                    name=driver.find_element(By.XPATH,'//h1').text.strip()
                 except:
                     continue
 
                 if is_closed():
-                    print("⛔ Closed:", name)
+                    print("⛔ Closed:",name)
                     continue
 
-                review_count = get_review_count()
+                review_count=get_review_count()
 
                 if review_count is None:
-                    print("⚠ No review data:", name)
+                    print("⚠ No review:",name)
                     continue
 
-                if review_count < MINIMUM_REVIEWS:
-                    print("⭐ Low reviews:", name)
+                if review_count<MINIMUM_REVIEWS:
+                    print("⭐ Low reviews:",name)
                     continue
 
-                phone = detect_phone()
+                phone=detect_phone()
 
-                print("Saving:", name, phone)
+                print("Saving:",name,phone)
 
-                if phone == "YES":
-                    sheet_with_phone.append_row([name, link, phone])
+                if phone=="YES":
+                    sheet_with_phone.append_row([name,link,phone])
                 else:
-                    sheet_no_phone.append_row([name, link, phone])
+                    sheet_no_phone.append_row([name,link,phone])
 
                 saved_links.add(link)
 
@@ -226,9 +230,10 @@ try:
 
 except Exception as e:
 
-    print("❌ ERROR:", str(e))
+    print("❌ ERROR:",str(e))
 
 finally:
 
     driver.quit()
-    print("🛑 Scraper stopped")
+
+    print("🛑 Scraper finished")
