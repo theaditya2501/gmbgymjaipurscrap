@@ -87,10 +87,7 @@ options.add_argument("--disable-gpu")
 
 options.binary_location = "/usr/bin/chromium"
 
-driver = webdriver.Chrome(
-    service=Service("/usr/bin/chromedriver"),
-    options=options
-)
+driver = webdriver.Chrome(options=options)
 
 wait = WebDriverWait(driver, 15)
 
@@ -243,3 +240,4 @@ except KeyboardInterrupt:
 
 finally:
     driver.quit()
+
