@@ -33,10 +33,14 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# 🔹 UPDATED: Load credentials from Railway environment variable
-creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+# 🔹 Load credentials from Railway environment variable
+creds_raw = os.environ["GOOGLE_CREDS"]
+creds_dict = json.loads(creds_raw)
 
+# 🔹 Fix newline issue in Railway variables
+creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 client = gspread.authorize(creds)
 
 sheet_with_phone = client.open(SHEET_WITH_PHONE_NAME).sheet1
@@ -141,7 +145,7 @@ def update_summary():
 # =========================
 options = Options()
 
-# 🔹 UPDATED FOR CLOUD
+# 🔹 Required for cloud servers
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
@@ -188,7 +192,6 @@ def get_review_count():
                     return int(number)
 
         return None
-
     except:
         return None
 
