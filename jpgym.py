@@ -56,19 +56,18 @@ print("🌍 Starting Chrome")
 
 options = Options()
 
-options.binary_location="/usr/bin/chromium"
+options.binary_location = "/usr/bin/chromium"
 
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
-options.add_argument("--remote-debugging-port=9222")
 
 service = Service("/usr/bin/chromedriver")
 
 driver = webdriver.Chrome(service=service, options=options)
 
-wait = WebDriverWait(driver,25)
+wait = WebDriverWait(driver,20)
 
 print("✅ Chrome started")
 
@@ -76,23 +75,30 @@ print("✅ Chrome started")
 # FUNCTIONS
 # =========================
 def detect_phone():
+
     tel=driver.find_elements(By.XPATH,'//a[starts-with(@href,"tel:")]')
     call=driver.find_elements(By.XPATH,'//button[contains(@aria-label,"Call")]')
+
     return "YES" if tel or call else "NO"
 
 
 def is_closed():
+
     elements=driver.find_elements(By.XPATH,
         "//*[contains(text(),'Temporarily closed') or contains(text(),'Permanently closed')]"
     )
+
     return True if elements else False
 
 
 def get_review_count():
+
     reviews=driver.find_elements(By.XPATH,'//span[@role="img" and contains(@aria-label,"review")]')
 
     for r in reviews:
+
         text=r.get_attribute("aria-label")
+
         if text:
             number=''.join(filter(str.isdigit,text))
             if number:
@@ -120,30 +126,6 @@ KEYWORDS=[
 saved_links=set()
 
 # =========================
-# FIND RESULTS PANEL
-# =========================
-def find_results_panel():
-
-    for i in range(10):
-
-        try:
-            panel=driver.find_element(By.XPATH,'//div[@role="feed"]')
-            return panel
-        except:
-            pass
-
-        try:
-            panel=driver.find_element(By.XPATH,'//div[contains(@class,"m6QErb")]')
-            return panel
-        except:
-            pass
-
-        time.sleep(2)
-
-    return None
-
-
-# =========================
 # MAIN LOOP
 # =========================
 try:
@@ -160,15 +142,10 @@ try:
 
             driver.get(url)
 
-            time.sleep(5)
-
-            results_panel=find_results_panel()
-
-            if results_panel is None:
-                print("❌ Results panel not found")
-                continue
-
-            print("✅ Results panel detected")
+            # wait until business links appear
+            wait.until(
+                EC.presence_of_element_located((By.XPATH,'//a[contains(@href,"/maps/place/")]'))
+            )
 
             profile_links=set()
 
@@ -186,11 +163,10 @@ try:
                     if link:
                         profile_links.add(link.split("?")[0])
 
-                print("Profiles:",len(profile_links))
+                print("Profiles collected:",len(profile_links))
 
                 driver.execute_script(
-                    "arguments[0].scrollTop=arguments[0].scrollHeight",
-                    results_panel
+                    "window.scrollTo(0, document.body.scrollHeight);"
                 )
 
                 time.sleep(2)
