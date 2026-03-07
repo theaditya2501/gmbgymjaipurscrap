@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
+print("🚀 SCRAPER STARTED")
 sys.stdout.reconfigure(encoding='utf-8')
 
 # =========================
@@ -240,4 +240,5 @@ except KeyboardInterrupt:
 
 finally:
     driver.quit()
+
 
